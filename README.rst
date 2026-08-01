@@ -101,13 +101,11 @@ Example usage
 yt_sim: a YouTube-like recommendation environment
 -------------------------------------------------
 
-``yt_sim`` is an extension built *on top of* T-RECS (it lives in the top-level
-``yt_sim/`` package and subclasses T-RECS components rather than modifying them)
+``yt_sim`` is an extension built *on top of* T-RECS 
 that turns the simulator into a black-box, YouTube-like environment for
-reinforcement-learning agents. An external agent acts as the *viewer*: at each
+ agents. An external agent acts as the *viewer*: at each
 step it sees the currently playing video and a slate of suggested videos, and it
-chooses an action. It is **not** told what any action does -- only the *next
-slate* reveals the consequences, exactly as a real viewer would experience.
+chooses an action.
 
 What it adds
 ############
