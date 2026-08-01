@@ -1,9 +1,16 @@
-from trecs.models import ImplicitMF
-from trecs.components import Users, Creators
 import numpy as np
 import scipy.sparse as sp
 import pytest
 import test_helpers
+
+# ImplicitMF requires the optional `lenskit` dependency (older `lenskit.algorithms`
+# API). Skip the whole module cleanly when it is unavailable instead of erroring
+# out during collection.
+ImplicitMF = pytest.importorskip("trecs.models").__dict__.get("ImplicitMF")
+if ImplicitMF is None:
+    pytest.skip("lenskit-based ImplicitMF is not available", allow_module_level=True)
+
+from trecs.components import Users, Creators
 
 
 class TestImplicitMF:

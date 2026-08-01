@@ -50,6 +50,18 @@ If you'd like to install the latest version of ``trecs`` based on what is curren
 
 Additionally, you may run ``pip install -r requirements-dev.txt`` to install a few additional dependencies that will be useful for linting, testing, etc.
 
+**Optional extras.** Two heavy/optional dependencies are installed on demand:
+
+..  code-block:: bash
+
+  pip install -e .[mf]   # enables the lenskit-based ImplicitMF model
+  pip install -e .[rl]   # enables the Gymnasium environment used by yt_sim (see below)
+
+``trecs`` installs and runs without either. If ``lenskit`` is missing or
+incompatible (its older ``lenskit.algorithms`` API is unavailable on recent
+releases), only :class:`trecs.models.ImplicitMF` becomes unavailable and a
+warning is emitted; every other model is unaffected.
+
 Documentation
 **************
 If you would like to edit the documentation, see the ``docs/`` folder. To build the documentation on your local folder, you will need to install ``sphinx`` and the ``sphinx-rtd-theme`` via ``pip``. Next, ``cd`` into the ``docs`` folder and run ``make html``. The output of the command should tell you where the compiled HTML documentation is located.
@@ -85,6 +97,101 @@ Example usage
   recsys = trecs.models.ContentFiltering()
   recsys.run(timesteps=10)
   measurements = recsys.get_measurements()
+
+yt_sim: a YouTube-like recommendation environment
+-------------------------------------------------
+
+``yt_sim`` is an extension built *on top of* T-RECS (it lives in the top-level
+``yt_sim/`` package and subclasses T-RECS components rather than modifying them)
+that turns the simulator into a black-box, YouTube-like environment for
+reinforcement-learning agents. An external agent acts as the *viewer*: at each
+step it sees the currently playing video and a slate of suggested videos, and it
+chooses an action. It is **not** told what any action does -- only the *next
+slate* reveals the consequences, exactly as a real viewer would experience.
+
+What it adds
+############
+
+- **Thumbnail-embedding items** (:class:`yt_sim.EmbeddingItems`): items carry a
+  fixed-length embedding (e.g. a CLIP thumbnail encoding) instead of, or
+  alongside, T-RECS's default attribute vectors. Supply a precomputed
+  ``[n_items, embed_dim]`` matrix, or flip a flag to fall back to the original
+  random-attribute path for testing.
+- **Two-stage recommendation funnel** (:class:`yt_sim.FunnelRecommender`, a
+  ``BaseRecommender`` subclass): Stage 1 does k-NN candidate generation over item
+  embeddings; Stage 2 ranks the candidates with a pluggable scoring function
+  (similarity + popularity + recency by default). It still runs under the
+  standard T-RECS ``run()`` loop.
+- **Two-tier action space** with pluggable effects
+  (:mod:`yt_sim.action_effects`): current-video actions (``watch_full``,
+  ``skip``, ``like`` -- ``like`` gated off by default) and suggested-video
+  actions (``click``, ``not_interested``). All action *semantics* live in a
+  swappable effect module, never in the step loop or the agent-facing API.
+- **"Not interested" neighborhood masking** (:class:`yt_sim.NotInterestedMask`):
+  suppresses the exact item permanently and its k nearest neighbors for a
+  configurable number of steps (neighbors resurface afterwards, mirroring how
+  YouTube's "Not interested" is understood to work in practice).
+- **Continuous watch simulation** (:class:`yt_sim.WatchModel`): an internal
+  engagement fraction, a probabilistic function of preference-item similarity,
+  that scales how far the viewer's preference drifts -- never exposed to the
+  agent.
+- **Gymnasium environment** (``yt_sim.YouTubeSimEnv``): reward-agnostic
+  (``reward`` is always ``0.0``) so your agent computes its own intrinsic reward
+  from the returned observations.
+
+Install
+#######
+
+..  code-block:: bash
+
+  pip install -e .[rl]   # trecs + gymnasium
+
+Quick start with the random-agent baseline
+##########################################
+
+..  code-block:: python
+
+  import numpy as np
+  from yt_sim import random_embeddings   # placeholder; use load_embeddings() for real CLIP vectors
+  from yt_sim.env import YouTubeSimEnv
+  from yt_sim.agents import RandomAgent
+
+  # [n_items, embed_dim] embedding matrix (swap in real thumbnail embeddings)
+  embeddings = random_embeddings(n_items=500, embed_dim=32, seed=0)
+
+  env = YouTubeSimEnv(embeddings, slate_size=5, max_steps=200, seed=0)
+  agent = RandomAgent(seed=0)
+
+  obs, info = env.reset(seed=0)
+  # obs = {"current_embedding": (embed_dim,),
+  #        "slate_embeddings": (slate_size, embed_dim),
+  #        "action_mask": (n_actions,)}   # 1 = action available; meanings are opaque
+  done = False
+  while not done:
+      action = agent.act(obs)                 # samples a valid action from the mask
+      obs, reward, terminated, truncated, info = env.step(action)
+      # reward is always 0.0 -- compute your own intrinsic reward from `obs` here
+      done = terminated or truncated
+
+To load real embeddings, replace ``random_embeddings(...)`` with
+``yt_sim.load_embeddings("thumbnails.npy")`` (a thin ``numpy.load`` stub you can
+adapt to your dataset).
+
+A runnable baseline script prints rollout statistics:
+
+..  code-block:: bash
+
+  python examples/random_agent_baseline.py --items 500 --dim 32 --steps 200 --episodes 3
+
+Tests
+#####
+
+..  code-block:: bash
+
+  # original T-RECS suite
+  cd trecs/tests && pytest
+  # yt_sim extension suite
+  pytest yt_sim/tests
 
 Documentation
 --------------

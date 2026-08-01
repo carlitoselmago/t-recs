@@ -153,7 +153,7 @@ class TestMatrixOps:
         z = mo.inner_product(x, y, normalize_users=False, normalize_items=False)
         assert isinstance(z, sp.spmatrix)
         correct_answer = sp.csr_matrix(correct_answer)
-        np.testing.assert_array_almost_equal(z.A, correct_answer.A)
+        np.testing.assert_array_almost_equal(z.toarray(), correct_answer.toarray())
 
     def test_sparse_dot(self):
         x = np.ones((3, 5))
